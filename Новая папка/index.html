@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Секция — посещаемость</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1f2937">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+body{position:relative;min-height:100vh}
+body:before{content:"";position:fixed;inset:0;background:url('background.jpg') center/cover no-repeat;opacity:.13;z-index:-1;pointer-events:none}
+
+body{font-family:Arial,sans-serif;margin:0;background:#f3f5f7;color:#18202a}header{background:rgba(31,41,55,.96);color:#fff;padding:18px}main{max-width:950px;margin:auto;padding:16px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}button{border:0;border-radius:9px;padding:10px 14px;cursor:pointer;background:#2563eb;color:#fff;margin:3px}button.red{background:#dc2626}button.gray{background:#6b7280}.card{background:rgba(255,255,255,.94);border-radius:14px;padding:16px;margin:10px 0;box-shadow:0 2px 8px #0001}
+input,select{padding:10px;border:1px solid #ccd2d8;border-radius:8px;width:100%;box-sizing:border-box;margin:5px 0 10px}table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px solid #eee;text-align:left}.hidden{display:none}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pill{display:inline-block;padding:4px 8px;border-radius:12px;background:#e8eefc;font-size:12px}@media(max-width:600px){.row{grid-template-columns:1fr}td,th{font-size:13px}}
+</style></head><body>
+<header><h2>Секция — посещаемость</h2><div>Ученики • посещения • разовая и месячная оплата</div></header>
+<main><nav><button onclick="show('attendance')">Посещение</button><button onclick="show('students')">Ученики</button><button onclick="show('payments')">Оплата за месяц</button><button onclick="show('reports')">Посещение и отчёт</button></nav>
+
+<section id="attendance"><div class="card"><h3>Отметить посещение</h3>
+<label>Дата</label><input type="date" id="date"><label>Ученик</label><select id="student"></select>
+<label>Сумма, ₽</label><input type="number" id="amount" min="0" step="50" value="500">
+<button onclick="addVisit()">Записать посещение</button>
+<p><small>Посещение отмечается для всех учеников. Если ученик оплачивает месяц, эта запись не меняет его месячную оплату — она только фиксирует факт и дату посещения.</small></p></div>
+<div class="card"><h3>Последние посещения</h3><div id="visits"></div></div></section>
+
+<section id="students" class="hidden"><div class="card"><h3>Добавить ученика</h3><div class="row">
+<div><label>Фамилия</label><input id="lname" placeholder="Иванов"></div><div><label>Имя</label><input id="fname" placeholder="Иван"></div></div>
+<button onclick="addStudent()">Добавить</button></div><div class="card"><h3>Ученики</h3><div id="studentsList"></div></div></section>
+
+<section id="payments" class="hidden"><div class="card"><h3>Оплата за месяц</h3>
+<div class="row"><div><label>Месяц</label><input type="month" id="month"></div><div><label>Ученик</label><select id="monthStudent"></select></div></div>
+<label>Сумма абонемента, ₽</label><input type="number" id="monthAmount" min="0" step="50" value="4000">
+<button onclick="addMonthPayment()">Сохранить оплату за месяц</button></div>
+<div class="card"><h3>Месячные оплаты</h3><div id="months"></div></div></section>
+
+<section id="reports" class="hidden"><div class="card"><h3>Посещение и отчёт</h3>
+<p>У всех учеников можно отмечать посещение по конкретной дате. Оплата при этом остаётся разовой или месячной.</p>
+<div class="row"><div><label>Месяц отчёта</label><input type="month" id="reportMonth"></div><div><label>Ученик</label><select id="reportStudent" onchange="selectReportStudent(this.value)"><option value="">Все ученики</option></select></div></div>
+<div id="report"></div></div></section>
+</main>
+<script>
+let students=JSON.parse(localStorage.getItem('students')||'[]');
+let visits=JSON.parse(localStorage.getItem('visits')||'[]');
+let monthly=JSON.parse(localStorage.getItem('monthly')||'[]');
+const $=id=>document.getElementById(id);
+function save(){localStorage.setItem('students',JSON.stringify(students));localStorage.setItem('visits',JSON.stringify(visits));localStorage.setItem('monthly',JSON.stringify(monthly))}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function show(x){['attendance','students','payments','reports'].forEach(s=>$(s).classList.toggle('hidden',s!==x));render()}
+function selectReportStudent(id){
+  // При выборе ученика сразу остаёмся в разделе «Посещение и отчёт» и показываем только его.
+  ['attendance','students','payments','reports'].forEach(s=>$(s).classList.toggle('hidden',s!=='reports'));
+  $('reportStudent').value=id;
+  render();
+  $('reportStudent').value=id;
+}
+function opts(){let o=students.map(s=>`<option value="${s.id}">${esc(s.lname)} ${esc(s.fname)}</option>`).join('');$('student').innerHTML=o;$('monthStudent').innerHTML=o}
+function render(){
+ opts();
+ let currentReportStudent=$('reportStudent').value;
+ $('reportStudent').innerHTML='<option value="">Все ученики</option>'+students.map(s=>`<option value="${s.id}">${esc(s.lname)} ${esc(s.fname)}</option>`).join('');
+ if(students.some(s=>String(s.id)===String(currentReportStudent))) $('reportStudent').value=currentReportStudent;
+ if(!$('reportMonth').value){$('reportMonth').value=new Date().toISOString().slice(0,7)}
+ $('studentsList').innerHTML=students.length?`<table><tr><th>Ученик</th><th>Действия</th></tr>`+students.map(s=>`<tr><td>${esc(s.lname)} ${esc(s.fname)}</td><td><button onclick="editStudent('${s.id}')">Редактировать</button><button class="red" onclick="delStudent('${s.id}')">Удалить</button></td></tr>`).join('')+'</table>':'Пока нет учеников.';
+ $('visits').innerHTML=visits.slice().reverse().slice(0,40).map(v=>`<p><b>${v.date}</b> — ${esc(v.name)} — ${v.amount} ₽ <span class="pill">разовое</span></p>`).join('')||'Посещений пока нет.';
+ $('months').innerHTML=monthly.slice().reverse().map(p=>`<p><b>${p.month}</b> — ${esc(p.name)} — ${p.amount} ₽ <span class="pill">месяц</span></p>`).join('')||'Оплат за месяц пока нет.';
+ let rm=$('reportMonth').value;
+ let rs=String($('reportStudent').value||'');
+ let filteredStudents=rs ? students.filter(s=>String(s.id)===rs) : students.slice();
+ let rows=filteredStudents.map(s=>{
+   let vs=visits.filter(v=>String(v.sid)===String(s.id)&&(!rm||v.date.startsWith(rm)));
+   let ms=monthly.filter(v=>String(v.sid)===String(s.id)&&(!rm||v.month===rm));
+   let monthlyPaid=ms.reduce((a,v)=>a+Number(v.amount),0);
+   let oneTotal=vs.reduce((a,v)=>a+Number(v.amount),0);
+   let type=ms.length?'месячное':'разовое';
+   let dates=vs.map(v=>`${v.date} (${v.amount} ₽)`).join(', ')||'—';
+   return `<tr><td>${esc(s.lname)} ${esc(s.fname)}</td><td>${type}</td><td>${vs.length}</td><td>${esc(dates)}</td><td>${monthlyPaid?monthlyPaid+' ₽':'—'}</td><td>${oneTotal?oneTotal+' ₽':'—'}</td></tr>`;
+ }).join('');
+ $('report').innerHTML=rows?`<table><tr><th>Ученик</th><th>Оплата</th><th>Посещений</th><th>Даты посещений (сумма)</th><th>Сумма за месяц</th><th>Сумма разовых</th></tr>${rows}</table>`:'Нет данных.';
+}
+function addStudent(){let l=$('lname').value.trim(),f=$('fname').value.trim();if(!l||!f)return alert('Введите фамилию и имя');students.push({id:Date.now().toString(),lname:l,fname:f});$('lname').value='';$('fname').value='';save();render()}
+function editStudent(id){let s=students.find(x=>x.id===id);let l=prompt('Фамилия:',s.lname);if(l===null)return;let f=prompt('Имя:',s.fname);if(f===null)return;l=l.trim();f=f.trim();if(!l||!f)return alert('Фамилия и имя не могут быть пустыми');s.lname=l;s.fname=f;visits.forEach(v=>{if(v.sid===id)v.name=l+' '+f});monthly.forEach(v=>{if(v.sid===id)v.name=l+' '+f});save();render()}
+function delStudent(id){if(confirm('Удалить ученика и все его посещения/оплаты?')){students=students.filter(s=>s.id!==id);visits=visits.filter(v=>v.sid!==id);monthly=monthly.filter(v=>v.sid!==id);save();render()}}
+function addVisit(){if(!students.length)return alert('Сначала добавьте ученика');let s=students.find(x=>x.id===$('student').value);visits.push({sid:s.id,name:s.lname+' '+s.fname,date:$('date').value,amount:+$('amount').value||0});save();render();alert('Разовое посещение записано')}
+function addMonthPayment(){if(!students.length)return alert('Сначала добавьте ученика');let s=students.find(x=>x.id===$('monthStudent').value),m=$('month').value;if(!m)return alert('Выберите месяц');let old=monthly.find(x=>x.sid===s.id&&x.month===m);if(old)old.amount=+$('monthAmount').value||0;else monthly.push({sid:s.id,name:s.lname+' '+s.fname,month:m,amount:+$('monthAmount').value||0});save();render();alert('Оплата за месяц сохранена')}
+let d=new Date();$('date').value=d.toISOString().slice(0,10);$('month').value=d.toISOString().slice(0,7);render();
+if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('sw.js')); }
+</script></body></html>
